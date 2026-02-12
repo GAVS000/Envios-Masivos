@@ -1,0 +1,25 @@
+# Backend
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy
+aiosqlite
+
+# Email
+sendgrid
+
+# Excel/CSV processing
+pandas
+openpyxl
+xlrd
+
+# Validation
+email-validator
+pydantic[email]
+
+# HTML sanitization
+bleach
+
+# Utilities
+python-dotenv
+jinja2

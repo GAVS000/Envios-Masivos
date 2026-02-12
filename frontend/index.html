@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📧 Correos Masivos - Dashboard</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --bg-dark: #1e1e2e;
+            --bg-card: #ffffff;
+            --text-muted: #6b7280;
+        }
+        
+        body {
+            background-color: #f3f4f6;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #7c3aed);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background: #4338ca;
+            border-color: #4338ca;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            border-color: var(--success-color);
+        }
+        
+        .progress {
+            height: 24px;
+            border-radius: 12px;
+            background: #e5e7eb;
+        }
+        
+        .progress-bar {
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-draft { background: #e5e7eb; color: #374151; }
+        .status-sending { background: #dbeafe; color: #1d4ed8; }
+        .status-completed { background: #d1fae5; color: #065f46; }
+        .status-error { background: #fee2e2; color: #991b1b; }
+        .status-cancelled { background: #fef3c7; color: #92400e; }
+        
+        .event-item {
+            padding: 8px 12px;
+            border-left: 3px solid #e5e7eb;
+            margin-bottom: 4px;
+            font-size: 0.875rem;
+            background: #f9fafb;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .event-item.success { border-color: var(--success-color); }
+        .event-item.error { border-color: var(--danger-color); }
+        .event-item.warning { border-color: var(--warning-color); }
+        .event-item.info { border-color: var(--primary-color); }
+        
+        .preview-frame {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            min-height: 300px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-zone:hover {
+            border-color: var(--primary-color);
+            background: #f8fafc;
+        }
+        
+        .upload-zone.dragover {
+            border-color: var(--primary-color);
+            background: #eef2ff;
+        }
+        
+        .mode-switch {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .mode-btn {
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn:hover {
+            border-color: var(--primary-color);
+        }
+        
+        .mode-btn.active.demo {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+        
+        .mode-btn.active.real {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+        
+        .html-editor {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            min-height: 250px;
+        }
+        
+        .tab-content {
+            padding-top: 20px;
+        }
+        
+        .recipients-table {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .attachment-item .filename {
+            flex: 1;
+            margin-left: 10px;
+        }
+        
+        .events-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .hidden { display: none !important; }
+        
+        /* Loading spinner */
+        .spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark py-3 mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#" onclick="showView('list')">
+                <i class="bi bi-envelope-paper-fill me-2 fs-4"></i>
+                <span class="fw-bold">Correos Masivos</span>
+            </a>
+            <div class="d-flex gap-2">
+                <button class="btn btn-light btn-sm" onclick="showView('list')">
+                    <i class="bi bi-list-ul me-1"></i> Campañas
+                </button>
+                <button class="btn btn-warning btn-sm" onclick="createCampaign()">
+                    <i class="bi bi-plus-lg me-1"></i> Nueva Campaña
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Toast container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <!-- ========================= -->
+        <!-- VIEW: Lista de Campañas -->
+        <!-- ========================= -->
+        <div id="view-list">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-inbox me-2"></i> Mis Campañas</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadCampaigns()">
+                        <i class="bi bi-arrow-clockwise"></i> Actualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Asunto</th>
+                                    <th>Modo</th>
+                                    <th>Destinatarios</th>
+                                    <th>Estado</th>
+                                    <th>Progreso</th>
+                                    <th>Creado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="campaignsList">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                        Cargando campañas...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================= -->
+        <!-- VIEW: Editar Campaña -->
+        <!-- ========================= -->
+        <div id="view-edit" class="hidden">
+            <div class="row g-4">
+                <!-- Columna Principal -->
+                <div class="col-lg-8">
+                    <!-- Asunto -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-chat-text me-2"></i> Contenido del Correo
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Asunto</label>
+                                <input type="text" class="form-control" id="campaignSubject" 
+                                       placeholder="Ej: ¡Hola {{nombre}}! Tenemos noticias para ti">
+                                <small class="text-muted">Usa {{variable}} para personalizar</small>
+                            </div>
+                            
+                            <!-- Tabs para editor -->
+                            <ul class="nav nav-tabs" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabHtml">
+                                        <i class="bi bi-code-slash"></i> HTML
+                                    </button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabText">
+                                        <i class="bi bi-file-text"></i> Texto plano
+                                    </button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPreview">
+                                        <i class="bi bi-eye"></i> Vista previa
+                                    </button>
+                                </li>
+                            </ul>
+                            
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="tabHtml">
+                                    <textarea class="form-control html-editor" id="campaignHtml" rows="12"
+                                              placeholder="<h1>Hola {{nombre}}</h1>&#10;<p>Te escribimos a {{email}} con novedades...</p>"></textarea>
+                                    <small class="text-muted">
+                                        Variables detectadas: <span id="detectedVars">-</span>
+                                    </small>
+                                </div>
+                                <div class="tab-pane fade" id="tabText">
+                                    <textarea class="form-control" id="campaignText" rows="12"
+                                              placeholder="Versión texto plano (opcional)"></textarea>
+                                </div>
+                                <div class="tab-pane fade" id="tabPreview">
+                                    <div class="preview-frame p-3" id="previewFrame">
+                                        <p class="text-muted text-center py-5">
+                                            Haz clic en "Actualizar preview" para ver el resultado
+                                        </p>
+                                    </div>
+                                    <div class="mt-2 d-flex gap-2 align-items-center">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="updatePreview()">
+                                            <i class="bi bi-arrow-clockwise"></i> Actualizar preview
+                                        </button>
+                                        <span class="text-muted small">Fila:</span>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               id="previewRowIndex" value="0" min="0" style="width: 80px">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Destinatarios -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-people me-2"></i> Destinatarios
+                        </div>
+                        <div class="card-body">
+                            <div class="upload-zone mb-3" id="excelDropZone" onclick="document.getElementById('excelFile').click()">
+                                <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelUpload(this)">
+                                <i class="bi bi-file-earmark-spreadsheet fs-1 text-primary"></i>
+                                <p class="mt-2 mb-0">Arrastra un archivo Excel/CSV o haz clic para seleccionar</p>
+                                <small class="text-muted">Formatos: .xlsx, .xls, .csv (máx 10MB)</small>
+                            </div>
+                            
+                            <div id="excelInfo" class="hidden">
+                                <div class="alert alert-success d-flex align-items-center">
+                                    <i class="bi bi-check-circle-fill me-2"></i>
+                                    <span id="excelFileName">archivo.xlsx</span>
+                                    <span class="ms-2">—</span>
+                                    <span class="ms-2"><strong id="validCount">0</strong> válidos</span>
+                                    <span class="mx-1">/</span>
+                                    <span><strong id="totalCount">0</strong> total</span>
+                                    <button class="btn btn-sm btn-outline-danger ms-auto" onclick="clearExcel()">
+                                        <i class="bi bi-x"></i> Quitar
+                                    </button>
+                                </div>
+                                
+                                <!-- Mapeo de columnas -->
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Columna de Email *</label>
+                                        <select class="form-select" id="emailColumnSelect"></select>
+                                    </div>
+                                </div>
+                                
+                                <!-- Errores -->
+                                <div id="excelErrors" class="hidden">
+                                    <div class="alert alert-warning">
+                                        <strong><i class="bi bi-exclamation-triangle me-1"></i> Problemas detectados:</strong>
+                                        <ul class="mb-0 mt-2" id="errorsList"></ul>
+                                    </div>
+                                </div>
+                                
+                                <!-- Preview de datos -->
+                                <div class="recipients-table">
+                                    <table class="table table-sm table-bordered">
+                                        <thead id="previewTableHead"></thead>
+                                        <tbody id="previewTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Adjuntos Fijos -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-paperclip me-2"></i> Adjuntos Fijos</span>
+                            <span class="badge bg-secondary" id="attachmentCount">0 / 10</span>
+                        </div>
+                        <div class="card-body">
+                            <small class="text-muted d-block mb-2">Estos archivos se envían a todos los destinatarios</small>
+                            <input type="file" id="attachmentFile" class="hidden" multiple 
+                                   accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.txt,.zip"
+                                   onchange="handleAttachmentUpload(this)">
+                            <div id="attachmentsList"></div>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('attachmentFile').click()">
+                                <i class="bi bi-plus"></i> Agregar adjunto
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Adjunto Dinámico/Personalizado -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-file-earmark-person me-2"></i> Adjunto Personalizado
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="dynamicAttachmentEnabled" 
+                                       onchange="toggleDynamicAttachment()">
+                                <label class="form-check-label" for="dynamicAttachmentEnabled">
+                                    Habilitar adjunto personalizado por destinatario
+                                </label>
+                            </div>
+                            
+                            <div id="dynamicAttachmentConfig" class="hidden">
+                                <div class="alert alert-info small">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Cada destinatario recibe un archivo diferente según las variables del Excel.
+                                    <br>Ejemplo: <code>Invitacion {{nombre}} {{apellido}}.pdf</code>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Patrón del nombre de archivo</label>
+                                    <input type="text" class="form-control" id="dynamicAttachmentPattern" 
+                                           placeholder="Ej: Invitacion {{nombre}} {{apellido}}.pdf">
+                                    <small class="text-muted">Usa las mismas variables del Excel</small>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Carpeta de archivos</label>
+                                    <input type="text" class="form-control" id="dynamicAttachmentFolder" 
+                                           placeholder="Ej: C:\\Documentos\\Invitaciones">
+                                    <small class="text-muted">Ruta absoluta donde están los PDF personalizados</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Lateral -->
+                <div class="col-lg-4">
+                    <!-- Modo de envío -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-gear me-2"></i> Modo de Envío
+                        </div>
+                        <div class="card-body">
+                            <div class="mode-switch mb-3">
+                                <button class="mode-btn demo active" id="btnModeDemo" onclick="setMode(true)">
+                                    <i class="bi bi-bug"></i> DEMO
+                                </button>
+                                <button class="mode-btn real" id="btnModeReal" onclick="setMode(false)">
+                                    <i class="bi bi-send"></i> REAL
+                                </button>
+                            </div>
+                            
+                            <div id="demoEmailsSection">
+                                <label class="form-label">Emails de prueba (modo DEMO)</label>
+                                <textarea class="form-control" id="demoEmails" rows="3"
+                                          placeholder="email1@ejemplo.com&#10;email2@ejemplo.com"></textarea>
+                                <small class="text-muted">Un email por línea (máx 10)</small>
+                            </div>
+                            
+                            <div class="alert alert-warning mt-3 mb-0" id="demoWarning">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Modo DEMO:</strong> Los correos se enviarán a los emails de prueba, NO a los destinatarios reales.
+                            </div>
+                            
+                            <div class="alert alert-danger mt-3 mb-0 hidden" id="realWarning">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Modo REAL:</strong> Los correos se enviarán a TODOS los destinatarios del Excel.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuración -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-sliders me-2"></i> Configuración
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Workers concurrentes</label>
+                                <input type="number" class="form-control" id="maxWorkers" value="5" min="1" max="20">
+                                <small class="text-muted">Más workers = más rápido (1-20)</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Reintentos máximos</label>
+                                <input type="number" class="form-control" id="maxRetries" value="3" min="1" max="10">
+                            </div>
+                            <div class="mb-0">
+                                <label class="form-label">Pausa entre envíos (seg)</label>
+                                <input type="number" class="form-control" id="batchPause" value="0" min="0" max="60" step="0.1">
+                                <small class="text-muted">0 = sin pausa</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Acciones -->
+                    <div class="card">
+                        <div class="card-body">
+                            <input type="hidden" id="currentCampaignId">
+                            
+                            <button class="btn btn-primary w-100 mb-2" onclick="saveCampaign()">
+                                <i class="bi bi-save me-1"></i> Guardar Campaña
+                            </button>
+                            
+                            <div class="d-flex gap-2 mb-2">
+                                <button class="btn btn-outline-info flex-fill" onclick="showTestModal()">
+                                    <i class="bi bi-send-check me-1"></i> Enviar Prueba
+                                </button>
+                            </div>
+                            
+                            <button class="btn btn-success w-100" onclick="startSending()" id="btnStartSending">
+                                <i class="bi bi-rocket-takeoff me-1"></i> Iniciar Envío Masivo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================= -->
+        <!-- VIEW: Monitor de Envío -->
+        <!-- ========================= -->
+        <div id="view-monitor" class="hidden">
+            <div class="row g-4">
+                <div class="col-lg-8">
+                    <!-- Estado principal -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-broadcast me-2"></i> 
+                                Monitor de Envío - <span id="monitorCampaignSubject">Campaña</span>
+                            </span>
+                            <span class="status-badge status-sending" id="monitorStatus">En progreso</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Progreso -->
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Progreso</span>
+                                    <span id="progressPercent">0%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Stats -->
+                            <div class="row text-center g-3">
+                                <div class="col-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value" id="statTotal">0</div>
+                                        <div class="stat-label">Total</div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value text-success" id="statSent">0</div>
+                                        <div class="stat-label">Enviados</div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value text-danger" id="statErrors">0</div>
+                                        <div class="stat-label">Errores</div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value text-muted" id="statPending">0</div>
+                                        <div class="stat-label">Pendientes</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Info adicional -->
+                            <div class="mt-4 pt-3 border-top">
+                                <div class="row text-muted small">
+                                    <div class="col-6">
+                                        <i class="bi bi-clock me-1"></i> Tiempo transcurrido: <span id="elapsed">-</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <i class="bi bi-hourglass-split me-1"></i> Tiempo estimado: <span id="remaining">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Eventos -->
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-list-ul me-2"></i> Últimos Eventos</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadEventHistory()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="events-container" id="eventsContainer">
+                                <p class="text-muted text-center py-3">Esperando eventos...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <!-- Controles -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-toggles me-2"></i> Controles
+                        </div>
+                        <div class="card-body">
+                            <button class="btn btn-danger w-100 mb-2" onclick="stopCampaign()" id="btnStop">
+                                <i class="bi bi-stop-fill me-1"></i> Detener Envío
+                            </button>
+                            <button class="btn btn-outline-primary w-100" onclick="downloadLog()">
+                                <i class="bi bi-download me-1"></i> Descargar Log CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Modo -->
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-primary me-2 fs-4"></i>
+                                <div>
+                                    <strong>Modo:</strong>
+                                    <span id="monitorMode" class="badge bg-warning">DEMO</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Enviar Prueba -->
+    <div class="modal fade" id="testModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-send-check me-2"></i> Enviar Correo de Prueba</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Email de destino</label>
+                        <input type="email" class="form-control" id="testEmail" placeholder="tu@email.com">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Usar datos de la fila #</label>
+                        <input type="number" class="form-control" id="testRowIndex" value="0" min="0">
+                        <small class="text-muted">0 = primera fila del Excel</small>
+                    </div>
+                    <div id="testResult" class="hidden">
+                        <div class="alert" id="testResultAlert"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" onclick="sendTestEmail()" id="btnSendTest">
+                        <i class="bi bi-send me-1"></i> Enviar Prueba
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ============================================================
+        // ESTADO GLOBAL
+        // ============================================================
+        let currentCampaign = null;
+        let eventSource = null;
+        let statusInterval = null;
+
+        const API_BASE = '/api';
+
+        // ============================================================
+        // UTILIDADES
+        // ============================================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const id = 'toast-' + Date.now();
+            
+            const bgClass = {
+                'success': 'bg-success',
+                'error': 'bg-danger',
+                'warning': 'bg-warning',
+                'info': 'bg-primary'
+            }[type] || 'bg-primary';
+            
+            container.innerHTML += `
+                <div id="${id}" class="toast show" role="alert">
+                    <div class="toast-header ${bgClass} text-white">
+                        <strong class="me-auto">${type.toUpperCase()}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                    </div>
+                    <div class="toast-body">${message}</div>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) el.remove();
+            }, 5000);
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(API_BASE + endpoint, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Error en la solicitud');
+                }
+                
+                return await response.json();
+            } catch (error) {
+                showToast(error.message, 'error');
+                throw error;
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatSeconds(seconds) {
+            if (!seconds) return '-';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}m ${secs}s`;
+        }
+
+        // ============================================================
+        // NAVEGACIÓN
+        // ============================================================
+        function showView(viewName) {
+            document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+            
+            if (viewName === 'list') {
+                loadCampaigns();
+                stopEventStream();
+            }
+        }
+
+        // ============================================================
+        // CAMPAÑAS - LISTA
+        // ============================================================
+        async function loadCampaigns() {
+            try {
+                const campaigns = await apiCall('/campaigns');
+                const tbody = document.getElementById('campaignsList');
+                
+                if (campaigns.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No hay campañas. <a href="#" onclick="createCampaign()">Crear una</a>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = campaigns.map(c => `
+                    <tr>
+                        <td>${c.id}</td>
+                        <td>${c.subject.substring(0, 40)}${c.subject.length > 40 ? '...' : ''}</td>
+                        <td>
+                            <span class="badge ${c.demo_mode ? 'bg-warning' : 'bg-danger'}">
+                                ${c.demo_mode ? 'DEMO' : 'REAL'}
+                            </span>
+                        </td>
+                        <td>${c.valid_recipients} / ${c.total_recipients}</td>
+                        <td><span class="status-badge status-${c.status}">${c.status}</span></td>
+                        <td>
+                            ${c.valid_recipients > 0 ? `
+                                <div class="progress" style="height: 6px; width: 80px;">
+                                    <div class="progress-bar bg-success" style="width: ${((c.sent_count + c.error_count) / c.valid_recipients * 100).toFixed(0)}%"></div>
+                                </div>
+                                <small>${c.sent_count}/${c.valid_recipients}</small>
+                            ` : '-'}
+                        </td>
+                        <td>${formatDate(c.created_at)}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="editCampaign(${c.id})" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                ${c.status === 'sending' ? `
+                                    <button class="btn btn-outline-info" onclick="monitorCampaign(${c.id})" title="Monitor">
+                                        <i class="bi bi-broadcast"></i>
+                                    </button>
+                                ` : ''}
+                                <button class="btn btn-outline-danger" onclick="deleteCampaign(${c.id})" title="Eliminar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        async function deleteCampaign(id) {
+            if (!confirm('¿Estás seguro de eliminar esta campaña?')) return;
+            
+            try {
+                await apiCall(`/campaigns/${id}`, { method: 'DELETE' });
+                showToast('Campaña eliminada', 'success');
+                loadCampaigns();
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // ============================================================
+        // CAMPAÑAS - CREAR/EDITAR
+        // ============================================================
+        function createCampaign() {
+            currentCampaign = null;
+            document.getElementById('currentCampaignId').value = '';
+            document.getElementById('campaignSubject').value = '';
+            document.getElementById('campaignHtml').value = '';
+            document.getElementById('campaignText').value = '';
+            document.getElementById('demoEmails').value = '';
+            document.getElementById('maxWorkers').value = '5';
+            document.getElementById('maxRetries').value = '3';
+            document.getElementById('batchPause').value = '0';
+            document.getElementById('excelInfo').classList.add('hidden');
+            document.getElementById('attachmentsList').innerHTML = '';
+            document.getElementById('attachmentCount').textContent = '0 / 10';
+            // Limpiar adjuntos dinámicos
+            document.getElementById('dynamicAttachmentEnabled').checked = false;
+            document.getElementById('dynamicAttachmentPattern').value = '';
+            document.getElementById('dynamicAttachmentFolder').value = '';
+            toggleDynamicAttachment();
+            setMode(true);
+            showView('edit');
+        }
+
+        async function editCampaign(id) {
+            try {
+                const campaign = await apiCall(`/campaigns/${id}`);
+                currentCampaign = campaign;
+                
+                document.getElementById('currentCampaignId').value = campaign.id;
+                document.getElementById('campaignSubject').value = campaign.subject;
+                document.getElementById('campaignHtml').value = campaign.html_body;
+                document.getElementById('campaignText').value = campaign.text_body || '';
+                document.getElementById('demoEmails').value = (campaign.demo_emails || []).join('\n');
+                document.getElementById('maxWorkers').value = campaign.max_workers;
+                document.getElementById('maxRetries').value = campaign.max_retries;
+                document.getElementById('batchPause').value = campaign.batch_pause;
+                
+                // Adjuntos dinámicos
+                document.getElementById('dynamicAttachmentEnabled').checked = campaign.dynamic_attachment_enabled || false;
+                document.getElementById('dynamicAttachmentPattern').value = campaign.dynamic_attachment_pattern || '';
+                document.getElementById('dynamicAttachmentFolder').value = campaign.dynamic_attachment_folder || '';
+                toggleDynamicAttachment();
+                
+                setMode(campaign.demo_mode);
+                
+                // Mostrar info del Excel si existe
+                if (campaign.excel_filename) {
+                    document.getElementById('excelInfo').classList.remove('hidden');
+                    document.getElementById('excelFileName').textContent = campaign.excel_filename;
+                    document.getElementById('validCount').textContent = campaign.valid_recipients;
+                    document.getElementById('totalCount').textContent = campaign.total_recipients;
+                } else {
+                    document.getElementById('excelInfo').classList.add('hidden');
+                }
+                
+                // Mostrar adjuntos
+                renderAttachments(campaign.attachments || []);
+                
+                showView('edit');
+                
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        async function saveCampaign() {
+            const id = document.getElementById('currentCampaignId').value;
+            const demoEmailsText = document.getElementById('demoEmails').value;
+            const demoEmails = demoEmailsText.split('\n').map(e => e.trim()).filter(e => e);
+            
+            const data = {
+                subject: document.getElementById('campaignSubject').value,
+                html_body: document.getElementById('campaignHtml').value,
+                text_body: document.getElementById('campaignText').value || null,
+                demo_mode: document.getElementById('btnModeDemo').classList.contains('active'),
+                demo_emails: demoEmails,
+                max_workers: parseInt(document.getElementById('maxWorkers').value),
+                max_retries: parseInt(document.getElementById('maxRetries').value),
+                batch_pause: parseFloat(document.getElementById('batchPause').value),
+                dynamic_attachment_enabled: document.getElementById('dynamicAttachmentEnabled').checked,
+                dynamic_attachment_pattern: document.getElementById('dynamicAttachmentPattern').value || null,
+                dynamic_attachment_folder: document.getElementById('dynamicAttachmentFolder').value || null
+            };
+            
+            try {
+                let result;
+                if (id) {
+                    result = await apiCall(`/campaigns/${id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    result = await apiCall('/campaigns', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    document.getElementById('currentCampaignId').value = result.id;
+                }
+                
+                currentCampaign = result;
+                showToast('Campaña guardada', 'success');
+                
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // ============================================================
+        // MODO DEMO/REAL
+        // ============================================================
+        function setMode(isDemo) {
+            const btnDemo = document.getElementById('btnModeDemo');
+            const btnReal = document.getElementById('btnModeReal');
+            const demoSection = document.getElementById('demoEmailsSection');
+            const demoWarning = document.getElementById('demoWarning');
+            const realWarning = document.getElementById('realWarning');
+            
+            if (isDemo) {
+                btnDemo.classList.add('active');
+                btnReal.classList.remove('active');
+                demoSection.classList.remove('hidden');
+                demoWarning.classList.remove('hidden');
+                realWarning.classList.add('hidden');
+            } else {
+                btnDemo.classList.remove('active');
+                btnReal.classList.add('active');
+                demoSection.classList.add('hidden');
+                demoWarning.classList.add('hidden');
+                realWarning.classList.remove('hidden');
+            }
+        }
+
+        // ============================================================
+        // EXCEL UPLOAD
+        // ============================================================
+        const dropZone = document.getElementById('excelDropZone');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadExcel(file);
+        });
+
+        function handleExcelUpload(input) {
+            if (input.files[0]) {
+                uploadExcel(input.files[0]);
+            }
+        }
+
+        async function uploadExcel(file) {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            // Detectar columna de email automáticamente - el backend buscará columnas comunes
+            formData.append('email_column', 'auto');
+            
+            try {
+                const response = await fetch(`${API_BASE}/campaigns/${campaignId}/upload-excel`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Error ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('excelInfo').classList.remove('hidden');
+                    document.getElementById('excelFileName').textContent = result.filename;
+                    document.getElementById('validCount').textContent = result.valid_rows;
+                    document.getElementById('totalCount').textContent = result.total_rows;
+                    
+                    // Llenar selector de columnas
+                    const select = document.getElementById('emailColumnSelect');
+                    select.innerHTML = result.columns.map(col => 
+                        `<option value="${col}" ${col === 'email' ? 'selected' : ''}>${col}</option>`
+                    ).join('');
+                    
+                    // Mostrar errores si los hay
+                    if (result.invalid_emails.length > 0 || result.duplicate_emails.length > 0) {
+                        document.getElementById('excelErrors').classList.remove('hidden');
+                        const errorsList = document.getElementById('errorsList');
+                        errorsList.innerHTML = '';
+                        
+                        if (result.invalid_emails.length > 0) {
+                            errorsList.innerHTML += `<li>${result.invalid_emails.length} emails inválidos</li>`;
+                        }
+                        if (result.duplicate_emails.length > 0) {
+                            errorsList.innerHTML += `<li>${result.duplicate_emails.length} emails duplicados</li>`;
+                        }
+                    } else {
+                        document.getElementById('excelErrors').classList.add('hidden');
+                    }
+                    
+                    // Preview table
+                    if (result.preview.length > 0) {
+                        const thead = document.getElementById('previewTableHead');
+                        const tbody = document.getElementById('previewTableBody');
+                        
+                        thead.innerHTML = '<tr>' + result.columns.map(col => `<th>${col}</th>`).join('') + '</tr>';
+                        tbody.innerHTML = result.preview.map(row => 
+                            '<tr>' + result.columns.map(col => `<td>${row[col] || ''}</td>`).join('') + '</tr>'
+                        ).join('');
+                    }
+                    
+                    showToast(`Excel cargado: ${result.valid_rows} destinatarios válidos`, 'success');
+                    
+                } else {
+                    showToast('Error al procesar el archivo', 'error');
+                }
+                
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        function clearExcel() {
+            document.getElementById('excelInfo').classList.add('hidden');
+            document.getElementById('excelFile').value = '';
+        }
+
+        // ============================================================
+        // ADJUNTOS
+        // ============================================================
+        async function handleAttachmentUpload(input) {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            for (const file of input.files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const result = await fetch(`${API_BASE}/campaigns/${campaignId}/attachments`, {
+                        method: 'POST',
+                        body: formData
+                    }).then(r => r.json());
+                    
+                    // Recargar campaña para obtener adjuntos actualizados
+                    const campaign = await apiCall(`/campaigns/${campaignId}`);
+                    renderAttachments(campaign.attachments || []);
+                    
+                    showToast(`Adjunto "${file.name}" agregado`, 'success');
+                    
+                } catch (error) {
+                    showToast(`Error subiendo ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            input.value = '';
+        }
+
+        function renderAttachments(attachments) {
+            const container = document.getElementById('attachmentsList');
+            document.getElementById('attachmentCount').textContent = `${attachments.length} / 10`;
+            
+            container.innerHTML = attachments.map(att => `
+                <div class="attachment-item">
+                    <i class="bi bi-paperclip text-muted"></i>
+                    <span class="filename">${att.filename}</span>
+                    <small class="text-muted">${(att.size / 1024).toFixed(1)} KB</small>
+                    <button class="btn btn-sm btn-link text-danger" onclick="deleteAttachment(${att.id})">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function deleteAttachment(attId) {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            
+            try {
+                await apiCall(`/campaigns/${campaignId}/attachments/${attId}`, { method: 'DELETE' });
+                
+                const campaign = await apiCall(`/campaigns/${campaignId}`);
+                renderAttachments(campaign.attachments || []);
+                
+                showToast('Adjunto eliminado', 'success');
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // ADJUNTOS DINÁMICOS
+        function toggleDynamicAttachment() {
+            const enabled = document.getElementById('dynamicAttachmentEnabled').checked;
+            const config = document.getElementById('dynamicAttachmentConfig');
+            if (enabled) {
+                config.classList.remove('hidden');
+            } else {
+                config.classList.add('hidden');
+            }
+        }
+
+        // ============================================================
+        // PREVIEW
+        // ============================================================
+        async function updatePreview() {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            const rowIndex = document.getElementById('previewRowIndex').value || 0;
+            
+            try {
+                const result = await apiCall(`/campaigns/${campaignId}/preview?row_index=${rowIndex}`);
+                document.getElementById('previewFrame').innerHTML = result.html_body;
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // ============================================================
+        // ENVÍO DE PRUEBA
+        // ============================================================
+        function showTestModal() {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            document.getElementById('testResult').classList.add('hidden');
+            new bootstrap.Modal(document.getElementById('testModal')).show();
+        }
+
+        async function sendTestEmail() {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            const testEmail = document.getElementById('testEmail').value;
+            const rowIndex = parseInt(document.getElementById('testRowIndex').value) || 0;
+            
+            if (!testEmail) {
+                showToast('Ingresa un email de prueba', 'warning');
+                return;
+            }
+            
+            const btn = document.getElementById('btnSendTest');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando...';
+            
+            try {
+                const result = await apiCall(`/campaigns/${campaignId}/send-test`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        test_email: testEmail,
+                        row_index: rowIndex
+                    })
+                });
+                
+                const resultDiv = document.getElementById('testResult');
+                const alertDiv = document.getElementById('testResultAlert');
+                
+                resultDiv.classList.remove('hidden');
+                alertDiv.className = `alert alert-${result.success ? 'success' : 'danger'}`;
+                alertDiv.innerHTML = `
+                    <strong>${result.success ? '✅ Éxito' : '❌ Error'}</strong>
+                    <p class="mb-0">${result.message}</p>
+                `;
+                
+            } catch (error) {
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send me-1"></i> Enviar Prueba';
+            }
+        }
+
+        // ============================================================
+        // ENVÍO MASIVO
+        // ============================================================
+        async function startSending() {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            // Confirmar si es modo REAL
+            const isDemo = document.getElementById('btnModeDemo').classList.contains('active');
+            if (!isDemo) {
+                if (!confirm('⚠️ MODO REAL: Los correos se enviarán a TODOS los destinatarios del Excel.\n\n¿Estás seguro de continuar?')) {
+                    return;
+                }
+            }
+            
+            try {
+                await apiCall(`/campaigns/${campaignId}/start`, { method: 'POST' });
+                showToast('Envío iniciado', 'success');
+                monitorCampaign(campaignId);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        async function stopCampaign() {
+            const campaignId = currentCampaign?.id;
+            if (!campaignId) return;
+            
+            if (!confirm('¿Estás seguro de detener el envío?')) return;
+            
+            try {
+                await apiCall(`/campaigns/${campaignId}/stop`, { method: 'POST' });
+                showToast('Deteniendo envío...', 'warning');
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // ============================================================
+        // MONITOR
+        // ============================================================
+        async function monitorCampaign(id) {
+            try {
+                const campaign = await apiCall(`/campaigns/${id}`);
+                currentCampaign = campaign;
+                
+                document.getElementById('monitorCampaignSubject').textContent = campaign.subject;
+                document.getElementById('monitorMode').textContent = campaign.demo_mode ? 'DEMO' : 'REAL';
+                document.getElementById('monitorMode').className = `badge ${campaign.demo_mode ? 'bg-warning' : 'bg-danger'}`;
+                
+                showView('monitor');
+                startEventStream(id);
+                startStatusPolling(id);
+                
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function startEventStream(campaignId) {
+            stopEventStream();
+            
+            eventSource = new EventSource(`${API_BASE}/campaigns/${campaignId}/events`);
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addEventToList(data);
+            };
+            
+            eventSource.addEventListener('status', (event) => {
+                const status = JSON.parse(event.data);
+                updateStatusDisplay(status);
+            });
+            
+            eventSource.addEventListener('done', (event) => {
+                stopEventStream();
+                const data = JSON.parse(event.data);
+                showToast(`Envío finalizado: ${data.status}`, data.status === 'completed' ? 'success' : 'warning');
+            });
+            
+            eventSource.onerror = () => {
+                // Reconectar después de un breve retraso
+                setTimeout(() => {
+                    if (currentCampaign) {
+                        startEventStream(currentCampaign.id);
+                    }
+                }, 3000);
+            };
+        }
+
+        function stopEventStream() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+        }
+
+        function startStatusPolling(campaignId) {
+            if (statusInterval) clearInterval(statusInterval);
+            
+            const poll = async () => {
+                try {
+                    const status = await apiCall(`/campaigns/${campaignId}/status`);
+                    updateStatusDisplay(status);
+                    
+                    if (['completed', 'cancelled', 'error'].includes(status.status)) {
+                        stopEventStream();
+                    }
+                } catch (error) {
+                    console.error(error);
+                }
+            };
+            
+            poll();
+            statusInterval = setInterval(poll, 2000);
+        }
+
+        function updateStatusDisplay(status) {
+            document.getElementById('monitorStatus').textContent = status.status;
+            document.getElementById('monitorStatus').className = `status-badge status-${status.status}`;
+            
+            document.getElementById('progressPercent').textContent = `${status.progress_percent.toFixed(1)}%`;
+            document.getElementById('progressBar').style.width = `${status.progress_percent}%`;
+            
+            document.getElementById('statTotal').textContent = status.total;
+            document.getElementById('statSent').textContent = status.sent;
+            document.getElementById('statErrors').textContent = status.errors;
+            document.getElementById('statPending').textContent = status.pending;
+            
+            document.getElementById('elapsed').textContent = formatSeconds(status.elapsed_seconds);
+            document.getElementById('remaining').textContent = formatSeconds(status.estimated_remaining_seconds);
+            
+            // Deshabilitar botón stop si ya terminó
+            document.getElementById('btnStop').disabled = ['completed', 'cancelled', 'error'].includes(status.status);
+        }
+
+        function addEventToList(event) {
+            const container = document.getElementById('eventsContainer');
+            
+            // Limpiar mensaje inicial
+            if (container.querySelector('.text-muted')) {
+                container.innerHTML = '';
+            }
+            
+            const div = document.createElement('div');
+            div.className = `event-item ${event.level}`;
+            div.innerHTML = `
+                <small class="text-muted">${new Date(event.created_at).toLocaleTimeString()}</small>
+                ${event.message}
+            `;
+            
+            container.insertBefore(div, container.firstChild);
+            
+            // Limitar a 50 eventos visibles
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        async function loadEventHistory() {
+            if (!currentCampaign) return;
+            
+            try {
+                const events = await apiCall(`/campaigns/${currentCampaign.id}/events/history?limit=50`);
+                const container = document.getElementById('eventsContainer');
+                container.innerHTML = '';
+                
+                events.forEach(event => addEventToList(event));
+                
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function downloadLog() {
+            if (!currentCampaign) return;
+            window.open(`${API_BASE}/campaigns/${currentCampaign.id}/log`, '_blank');
+        }
+
+        // ============================================================
+        // DETECCIÓN DE VARIABLES
+        // ============================================================
+        document.getElementById('campaignHtml').addEventListener('input', (e) => {
+            const vars = e.target.value.match(/\{\{\s*(\w+)\s*\}\}/g) || [];
+            const uniqueVars = [...new Set(vars.map(v => v.replace(/[{}]/g, '').trim()))];
+            document.getElementById('detectedVars').textContent = uniqueVars.length > 0 ? uniqueVars.join(', ') : '-';
+        });
+
+        // ============================================================
+        // INICIALIZACIÓN
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCampaigns();
+        });
+    </script>
+</body>
+</html>
