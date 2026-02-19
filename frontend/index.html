@@ -401,7 +401,25 @@
                                     </div>
                                 </div>
                                 
+                                <!-- Buscador de destinatarios -->
+                                <div class="mb-3">
+                                    <label class="form-label"><i class="bi bi-search me-1"></i> Buscar destinatario</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="recipientSearchInput" 
+                                               placeholder="Buscar por email o nombre..." 
+                                               onkeydown="if(event.key==='Enter') searchRecipient()">
+                                        <button class="btn btn-outline-primary" type="button" onclick="searchRecipient()">
+                                            <i class="bi bi-search"></i> Buscar
+                                        </button>
+                                    </div>
+                                    <small class="text-muted">Busca si una persona está incluida en este envío</small>
+                                </div>
+                                
+                                <!-- Resultado de búsqueda -->
+                                <div id="searchResult" class="hidden mb-3"></div>
+                                
                                 <!-- Preview de datos -->
+                                <p class="text-muted small mb-1">Vista previa (primeros 20 de <span id="totalPreviewCount">0</span>):</p>
                                 <div class="recipients-table">
                                     <table class="table table-sm table-bordered">
                                         <thead id="previewTableHead"></thead>
@@ -888,6 +906,15 @@
             document.getElementById('excelInfo').classList.add('hidden');
             document.getElementById('attachmentsList').innerHTML = '';
             document.getElementById('attachmentCount').textContent = '0 / 10';
+            // Limpiar tabla de preview y selector de columnas
+            document.getElementById('previewTableHead').innerHTML = '';
+            document.getElementById('previewTableBody').innerHTML = '';
+            document.getElementById('emailColumnSelect').innerHTML = '';
+            document.getElementById('excelErrors').classList.add('hidden');
+            document.getElementById('totalPreviewCount').textContent = '0';
+            // Limpiar buscador
+            document.getElementById('searchResult').classList.add('hidden');
+            document.getElementById('recipientSearchInput').value = '';
             // Limpiar adjuntos dinámicos
             document.getElementById('dynamicAttachmentEnabled').checked = false;
             document.getElementById('dynamicAttachmentPattern').value = '';
@@ -925,8 +952,15 @@
                     document.getElementById('excelFileName').textContent = campaign.excel_filename;
                     document.getElementById('validCount').textContent = campaign.valid_recipients;
                     document.getElementById('totalCount').textContent = campaign.total_recipients;
+                    
+                    // Cargar destinatarios guardados de la BD para mostrar en la tabla de preview
+                    await loadRecipientsPreview(id, campaign.email_column);
                 } else {
                     document.getElementById('excelInfo').classList.add('hidden');
+                    // Limpiar tabla de preview
+                    document.getElementById('previewTableHead').innerHTML = '';
+                    document.getElementById('previewTableBody').innerHTML = '';
+                    document.getElementById('emailColumnSelect').innerHTML = '';
                 }
                 
                 // Mostrar adjuntos
@@ -936,6 +970,135 @@
                 
             } catch (error) {
                 console.error(error);
+            }
+        }
+        
+        async function loadRecipientsPreview(campaignId, emailColumn) {
+            try {
+                // Obtener hasta 20 recipients para preview
+                const response = await apiCall(`/campaigns/${campaignId}/recipients?limit=20`);
+                const recipients = response.recipients || [];
+                const total = response.total || 0;
+                
+                // Mostrar total
+                document.getElementById('totalPreviewCount').textContent = total;
+                
+                // Limpiar búsqueda anterior
+                document.getElementById('searchResult').classList.add('hidden');
+                document.getElementById('recipientSearchInput').value = '';
+                
+                if (recipients.length === 0) {
+                    return;
+                }
+                
+                // Construir las columnas a partir de los datos
+                // La columna de email viene de campaign.email_column, el resto de recipient.data
+                const firstRecipient = recipients[0];
+                const dataColumns = Object.keys(firstRecipient.data || {});
+                const columns = [emailColumn || 'email', ...dataColumns.filter(c => c !== emailColumn)];
+                
+                // Llenar el selector de columnas
+                const select = document.getElementById('emailColumnSelect');
+                select.innerHTML = columns.map(col => 
+                    `<option value="${col}" ${col === emailColumn ? 'selected' : ''}>${col}</option>`
+                ).join('');
+                
+                // Construir datos de preview en formato tabla
+                const previewData = recipients.map(r => {
+                    const row = { [emailColumn || 'email']: r.email };
+                    Object.assign(row, r.data || {});
+                    return row;
+                });
+                
+                // Renderizar tabla
+                const thead = document.getElementById('previewTableHead');
+                const tbody = document.getElementById('previewTableBody');
+                
+                thead.innerHTML = '<tr>' + columns.map(col => `<th>${col}</th>`).join('') + '</tr>';
+                tbody.innerHTML = previewData.map(row => 
+                    '<tr>' + columns.map(col => `<td>${row[col] || ''}</td>`).join('') + '</tr>'
+                ).join('');
+                
+            } catch (error) {
+                console.error('Error cargando recipients para preview:', error);
+            }
+        }
+        
+        async function searchRecipient() {
+            const campaignId = document.getElementById('currentCampaignId').value;
+            const query = document.getElementById('recipientSearchInput').value.trim();
+            const resultDiv = document.getElementById('searchResult');
+            
+            if (!campaignId) {
+                showToast('Primero guarda la campaña', 'warning');
+                return;
+            }
+            
+            if (!query) {
+                showToast('Ingresa un término de búsqueda', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await apiCall(`/campaigns/${campaignId}/recipients/search?q=${encodeURIComponent(query)}`);
+                
+                resultDiv.classList.remove('hidden');
+                
+                if (response.found === 0) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-x-circle me-2"></i>
+                            <strong>No encontrado:</strong> "${query}" no está en este envío.
+                            <br><small class="text-muted">Se buscó en ${response.total_in_campaign.toLocaleString()} destinatarios.</small>
+                        </div>
+                    `;
+                } else {
+                    const statusBadge = (status) => {
+                        const colors = {
+                            'sent': 'bg-success',
+                            'pending': 'bg-secondary',
+                            'error': 'bg-danger',
+                            'skipped': 'bg-warning'
+                        };
+                        return `<span class="badge ${colors[status] || 'bg-secondary'}">${status}</span>`;
+                    };
+                    
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>
+                            <strong>Encontrado${response.found > 1 ? 's' : ''}:</strong> ${response.found} resultado${response.found > 1 ? 's' : ''} para "${query}"
+                        </div>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Datos</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.results.map(r => `
+                                        <tr>
+                                            <td>${r.email}</td>
+                                            <td><small>${Object.entries(r.data || {}).map(([k,v]) => `<b>${k}:</b> ${v}`).join(', ') || '-'}</small></td>
+                                            <td>${statusBadge(r.status)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                resultDiv.classList.remove('hidden');
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error al buscar: ${error.message}
+                    </div>
+                `;
             }
         }
 
@@ -1064,6 +1227,11 @@
                     document.getElementById('excelFileName').textContent = result.filename;
                     document.getElementById('validCount').textContent = result.valid_rows;
                     document.getElementById('totalCount').textContent = result.total_rows;
+                    document.getElementById('totalPreviewCount').textContent = result.valid_rows;
+                    
+                    // Limpiar búsqueda anterior
+                    document.getElementById('searchResult').classList.add('hidden');
+                    document.getElementById('recipientSearchInput').value = '';
                     
                     // Llenar selector de columnas
                     const select = document.getElementById('emailColumnSelect');

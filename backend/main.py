@@ -327,6 +327,44 @@ async def get_recipients(
     }
 
 
+@app.get("/api/campaigns/{campaign_id}/recipients/search")
+async def search_recipients(
+    campaign_id: int,
+    q: str,
+    db: Session = Depends(get_db)
+):
+    """Busca destinatarios por email o datos (nombre, etc.)."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    
+    # Obtener todos los recipients de la campaña
+    recipients = db.query(Recipient).filter(Recipient.campaign_id == campaign_id).all()
+    
+    search_term = q.lower().strip()
+    results = []
+    
+    for r in recipients:
+        # Buscar en email
+        if search_term in r.email.lower():
+            results.append(r.to_dict())
+            continue
+        
+        # Buscar en datos adicionales (nombre, empresa, etc.)
+        if r.data:
+            for key, value in r.data.items():
+                if value and search_term in str(value).lower():
+                    results.append(r.to_dict())
+                    break
+    
+    return {
+        "query": q,
+        "total_in_campaign": len(recipients),
+        "found": len(results),
+        "results": results[:50]  # Limitar a 50 resultados
+    }
+
+
 # ============================================================================
 # ADJUNTOS
 # ============================================================================

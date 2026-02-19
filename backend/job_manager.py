@@ -273,13 +273,46 @@ class JobManager:
                         attachments = list(fixed_attachments)  # Copia de los fijos
                         
                         # Agregar adjunto dinámico si está habilitado
-                        if dynamic_enabled and dynamic_folder and pdf_index:
+                        if dynamic_enabled and dynamic_folder:
                             try:
-                                # Buscar archivo usando el índice pre-cargado (búsqueda rápida)
-                                dynamic_path = self._find_matching_file_fast(
-                                    pdf_index, 
-                                    recipient_data
-                                )
+                                dynamic_path = None
+                                folder_path = Path(dynamic_folder)
+                                
+                                # MÉTODO 1: Buscar por pattern exacto (case-insensitive en Windows)
+                                if dynamic_pattern:
+                                    rendered_filename = render_template(dynamic_pattern, recipient_data)
+                                    
+                                    # Intentar búsqueda exacta primero
+                                    exact_path = folder_path / rendered_filename
+                                    if exact_path.exists():
+                                        dynamic_path = exact_path
+                                    else:
+                                        # Búsqueda case-insensitive: listar archivos y comparar
+                                        rendered_lower = rendered_filename.lower()
+                                        for file_in_folder in folder_path.iterdir():
+                                            if file_in_folder.name.lower() == rendered_lower:
+                                                dynamic_path = file_in_folder
+                                                break
+                                    
+                                    if dynamic_path:
+                                        self._add_event(
+                                            campaign_id, "debug",
+                                            f"Adjunto encontrado por pattern: {dynamic_path.name}",
+                                            {"email": recipient.email}
+                                        )
+                                
+                                # MÉTODO 2: Si no hay pattern o no se encontró, buscar por nombre en índice
+                                if not dynamic_path and pdf_index:
+                                    dynamic_path = self._find_matching_file_fast(
+                                        pdf_index, 
+                                        recipient_data
+                                    )
+                                    if dynamic_path:
+                                        self._add_event(
+                                            campaign_id, "debug",
+                                            f"Adjunto encontrado por búsqueda fuzzy: {dynamic_path.name}",
+                                            {"email": recipient.email}
+                                        )
                                 
                                 if dynamic_path and dynamic_path.exists():
                                     attachments.append({
@@ -288,16 +321,17 @@ class JobManager:
                                     })
                                 else:
                                     nombre = recipient_data.get("Nombre") or recipient_data.get("nombre") or ""
+                                    searched_name = render_template(dynamic_pattern, recipient_data) if dynamic_pattern else nombre
                                     self._add_event(
                                         campaign_id, "warning",
-                                        f"PDF no encontrado para: {nombre}",
-                                        {"email": recipient.email}
+                                        f"PDF no encontrado: '{searched_name}' en carpeta '{dynamic_folder}'",
+                                        {"email": recipient.email, "searched": searched_name}
                                     )
                             except Exception as e:
                                 self._add_event(
-                                    campaign_id, "warning",
+                                    campaign_id, "error",
                                     f"Error al procesar adjunto dinámico: {str(e)}",
-                                    {"email": recipient.email}
+                                    {"email": recipient.email, "error": str(e)}
                                 )
                         
                         # Enviar tarea al executor
@@ -416,10 +450,13 @@ class JobManager:
                 on_complete(campaign_id, state)
     
     def _normalize_text(self, text: str) -> str:
-        """Normaliza texto: quita acentos y convierte a minúsculas."""
+        """Normaliza texto: quita acentos, puntos y convierte a minúsculas."""
         import unicodedata
+        import re
         text = unicodedata.normalize('NFD', text)
         text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+        # Quitar puntos y otros caracteres especiales (excepto espacios)
+        text = re.sub(r'[^\w\s]', '', text)
         return text.lower()
     
     def _build_pdf_index(self, folder: str) -> Dict[frozenset, Path]:
@@ -454,9 +491,9 @@ class JobManager:
         
         Busca un PDF que contenga todas las palabras del nombre del destinatario.
         """
-        # Obtener nombre del destinatario
+        # Obtener nombre del destinatario - buscar en varias claves posibles
         nombre_completo = ""
-        for key in ["Nombre", "nombre", "nombre_completo", "NOMBRE"]:
+        for key in ["nombres", "Nombres", "NOMBRES", "Nombre", "nombre", "nombre_completo", "NOMBRE"]:
             if key in recipient_data and recipient_data[key]:
                 nombre_completo = str(recipient_data[key]).strip()
                 break
@@ -464,18 +501,26 @@ class JobManager:
         if not nombre_completo:
             return None
         
-        # Palabras del nombre del destinatario
+        # Palabras del nombre del destinatario (normalizadas)
         palabras_nombre = frozenset(self._normalize_text(nombre_completo).split())
         
-        # Buscar coincidencia exacta primero (todas las palabras)
+        # Buscar coincidencia exacta primero (todas las palabras del nombre están en el archivo)
         for palabras_archivo, file_path in pdf_index.items():
             if palabras_nombre.issubset(palabras_archivo):
+                return file_path
+        
+        # También buscar al revés: todas las palabras del archivo están en el nombre
+        # Esto cubre casos donde el archivo tiene menos palabras que el Excel
+        for palabras_archivo, file_path in pdf_index.items():
+            # Quitar palabras comunes como "invitacion"
+            palabras_archivo_filtradas = palabras_archivo - frozenset(['invitacion', 'invitation', 'inv'])
+            if palabras_archivo_filtradas.issubset(palabras_nombre):
                 return file_path
         
         # Si no hay coincidencia exacta, buscar 80% de coincidencia
         for palabras_archivo, file_path in pdf_index.items():
             coincidencias = palabras_nombre.intersection(palabras_archivo)
-            if len(coincidencias) >= len(palabras_nombre) * 0.8:
+            if len(palabras_nombre) > 0 and len(coincidencias) >= len(palabras_nombre) * 0.8:
                 return file_path
         
         return None

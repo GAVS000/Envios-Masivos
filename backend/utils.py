@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 from email_validator import validate_email, EmailNotValidError
 import bleach
+from bleach.css_sanitizer import CSSSanitizer
 from jinja2 import Template, Environment, BaseLoader, TemplateSyntaxError
 
 from config import ALLOWED_EXCEL_EXTENSIONS, ALLOWED_ATTACHMENT_EXTENSIONS, MAX_FILE_SIZE
@@ -60,24 +61,43 @@ def sanitize_html(html: str) -> str:
         'th': ['colspan', 'rowspan', 'width', 'height', 'align', 'valign'],
     }
     
-    return bleach.clean(html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+    # Permitir propiedades CSS comunes para emails
+    css_sanitizer = CSSSanitizer(allowed_css_properties=[
+        'color', 'background-color', 'background', 'font-size', 'font-family',
+        'font-weight', 'font-style', 'text-align', 'text-decoration', 'line-height',
+        'margin', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
+        'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
+        'border', 'border-color', 'border-width', 'border-style',
+        'width', 'height', 'max-width', 'min-width', 'display', 'vertical-align'
+    ])
+    
+    return bleach.clean(html, tags=allowed_tags, attributes=allowed_attrs, 
+                        css_sanitizer=css_sanitizer, strip=True)
 
 
 def render_template(template_str: str, data: Dict[str, Any]) -> str:
     """
     Renderiza una plantilla con variables.
     Soporta sintaxis {{variable}} y {{ variable }}.
+    Busca claves de forma case-insensitive.
     """
     try:
         # Crear environment de Jinja2
         env = Environment(loader=BaseLoader())
         
-        # Convertir sintaxis {{var}} a {{ var }} si es necesario
-        # Jinja2 ya soporta ambas
+        # Crear diccionario case-insensitive
+        # Mantener claves originales Y agregar versiones en minúsculas
+        case_insensitive_data = {}
+        for key, value in data.items():
+            case_insensitive_data[key] = value  # Clave original
+            case_insensitive_data[key.lower()] = value  # Versión minúscula
+            case_insensitive_data[key.upper()] = value  # Versión mayúscula
+            case_insensitive_data[key.capitalize()] = value  # Versión capitalizada
+        
         template = env.from_string(template_str)
         
         # Renderizar con datos
-        return template.render(**data)
+        return template.render(**case_insensitive_data)
     except TemplateSyntaxError as e:
         # Si hay error de sintaxis, devolver original
         return template_str

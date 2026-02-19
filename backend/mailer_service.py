@@ -1,17 +1,32 @@
 """
 Servicio de envío de correos usando SendGrid.
 Incluye reintentos con backoff exponencial.
+Mejoras de entregabilidad para Microsoft/Hotmail.
 """
 import time
 import base64
+import re
+import uuid
+from html import unescape
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail, Email, To, Content, Attachment, FileContent,
-    FileName, FileType, Disposition
+    FileName, FileType, Disposition, Header
 )
+
+# Dominios de Microsoft que requieren tratamiento especial
+MICROSOFT_DOMAINS = {
+    'hotmail.com', 'hotmail.es', 'hotmail.co.uk', 'hotmail.fr', 'hotmail.de',
+    'outlook.com', 'outlook.es', 'outlook.co.uk', 'outlook.fr', 'outlook.de',
+    'live.com', 'live.es', 'live.co.uk', 'live.fr', 'live.de',
+    'msn.com', 'passport.com'
+}
+
+# Delay adicional para dominios Microsoft (segundos)
+MICROSOFT_EXTRA_DELAY = 2.0
 
 from config import (
     SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, SENDGRID_FROM_NAME,
@@ -30,6 +45,32 @@ class EmailResult:
     attempts: int = 1
 
 
+def is_microsoft_domain(email: str) -> bool:
+    """Detecta si el email pertenece a un dominio de Microsoft."""
+    try:
+        domain = email.lower().split('@')[1]
+        return domain in MICROSOFT_DOMAINS
+    except (IndexError, AttributeError):
+        return False
+
+
+def html_to_plain_text(html: str) -> str:
+    """Convierte HTML a texto plano básico."""
+    # Reemplazar saltos de línea HTML
+    text = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '\n\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</li>', '\n', text, flags=re.IGNORECASE)
+    # Eliminar todas las etiquetas HTML
+    text = re.sub(r'<[^>]+>', '', text)
+    # Decodificar entidades HTML
+    text = unescape(text)
+    # Normalizar espacios
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    return text.strip()
+
+
 class MailerService:
     """
     Servicio para envío de correos usando SendGrid.
@@ -39,6 +80,7 @@ class MailerService:
     - Soporte para adjuntos
     - Renderizado de plantillas con variables
     - Modo demo (envía a lista fija en lugar de destinatario real)
+    - Headers optimizados para Microsoft/Hotmail
     """
     
     def __init__(
@@ -99,6 +141,11 @@ class MailerService:
         rendered_html = render_template(html_body, render_data)
         rendered_text = render_template(text_body, render_data) if text_body else None
         
+        # IMPORTANTE: Siempre generar texto plano si no existe
+        # Microsoft/Hotmail requiere multipart/alternative para buena entregabilidad
+        if not rendered_text:
+            rendered_text = html_to_plain_text(rendered_html)
+        
         # Crear mensaje
         message = Mail(
             from_email=Email(self.from_email, self.from_name),
@@ -106,12 +153,25 @@ class MailerService:
             subject=rendered_subject
         )
         
-        # Agregar contenido HTML
+        # IMPORTANTE: El orden debe ser text/plain PRIMERO, luego text/html
+        # Esto crea un multipart/alternative correcto que Microsoft acepta mejor
+        message.add_content(Content("text/plain", rendered_text))
         message.add_content(Content("text/html", rendered_html))
         
-        # Agregar contenido texto si existe
-        if rendered_text:
-            message.add_content(Content("text/plain", rendered_text))
+        # Agregar headers importantes para mejorar entregabilidad
+        # Especialmente crítico para Microsoft/Hotmail/Outlook
+        message_id = f"<{uuid.uuid4()}@{self.from_email.split('@')[1]}>"
+        message.add_header(Header("Message-ID", message_id))
+        
+        # List-Unsubscribe es MUY importante para Microsoft
+        # Usar el email de respuesta como unsubscribe básico
+        unsubscribe_email = f"mailto:{self.from_email}?subject=unsubscribe"
+        message.add_header(Header("List-Unsubscribe", f"<{unsubscribe_email}>"))
+        message.add_header(Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"))
+        
+        # Headers adicionales de legitimidad
+        message.add_header(Header("X-Priority", "3"))  # Normal priority
+        message.add_header(Header("X-Mailer", "SendGrid-MassMailer/1.0"))
         
         # Agregar adjuntos
         if attachments:
@@ -120,20 +180,36 @@ class MailerService:
                 if attachment:
                     message.add_attachment(attachment)
         
+        # Detectar si es dominio Microsoft para delay adicional
+        is_microsoft = is_microsoft_domain(actual_recipient)
+        
         # Enviar con reintentos
-        return self._send_with_retry(message, to_email)
+        return self._send_with_retry(message, to_email, is_microsoft)
     
     def _create_attachment(self, att_info: Dict[str, Any]) -> Optional[Attachment]:
         """Crea objeto Attachment de SendGrid."""
         try:
-            filepath = Path(att_info.get('path', ''))
+            raw_path = att_info.get('path', '')
+            filepath = Path(raw_path)
             filename = att_info.get('filename', filepath.name)
             
+            # Verificar que el archivo existe
             if not filepath.exists():
+                print(f"[ATTACHMENT ERROR] Archivo no existe: {filepath}")
                 return None
             
+            # Verificar que es un archivo (no directorio)
+            if not filepath.is_file():
+                print(f"[ATTACHMENT ERROR] No es un archivo: {filepath}")
+                return None
+            
+            # Leer y codificar el archivo
             with open(filepath, 'rb') as f:
                 data = f.read()
+            
+            if len(data) == 0:
+                print(f"[ATTACHMENT ERROR] Archivo vacío: {filepath}")
+                return None
             
             encoded = base64.b64encode(data).decode()
             
@@ -143,13 +219,26 @@ class MailerService:
             attachment.file_type = FileType(get_mime_type(filename))
             attachment.disposition = Disposition('attachment')
             
+            print(f"[ATTACHMENT OK] {filename} ({len(data)} bytes)")
             return attachment
-        except Exception:
+        except Exception as e:
+            print(f"[ATTACHMENT ERROR] Excepción al crear adjunto: {e}")
             return None
     
-    def _send_with_retry(self, message: Mail, original_email: str) -> EmailResult:
-        """Envía mensaje con reintentos y backoff exponencial."""
+    def _send_with_retry(self, message: Mail, original_email: str, is_microsoft: bool = False) -> EmailResult:
+        """
+        Envía mensaje con reintentos y backoff exponencial.
+        
+        Args:
+            message: Mensaje a enviar
+            original_email: Email original del destinatario
+            is_microsoft: Si True, aplica delay adicional para mejorar entregabilidad
+        """
         last_error = ""
+        
+        # Delay inicial para dominios Microsoft (antes de enviar)
+        if is_microsoft:
+            time.sleep(MICROSOFT_EXTRA_DELAY)
         
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -160,7 +249,7 @@ class MailerService:
                         success=True,
                         email=original_email,
                         status_code=response.status_code,
-                        message="Enviado correctamente",
+                        message="Enviado correctamente" + (" (Microsoft)" if is_microsoft else ""),
                         attempts=attempt
                     )
                 else:
@@ -170,8 +259,10 @@ class MailerService:
                 last_error = str(e)
             
             # Backoff exponencial antes de reintentar
+            # Más conservador para Microsoft
             if attempt < self.max_retries:
-                delay = self.retry_base_delay * (2 ** (attempt - 1))
+                base_delay = self.retry_base_delay * (2 if is_microsoft else 1)
+                delay = base_delay * (2 ** (attempt - 1))
                 time.sleep(delay)
         
         return EmailResult(
